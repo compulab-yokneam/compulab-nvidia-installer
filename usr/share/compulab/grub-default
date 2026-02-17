@@ -1,0 +1,11 @@
+# compulab
+GRUB_CMDLINE_LINUX=""
+GRUB_CMDLINE_LINUX_DEFAULT=" rootwait console=ttyTCU0,115200 console=tty1 firmware_class.path=/etc/firmware net.ifnames=0 plymouth.enable=0 fsck.mode=force fsck.repair=yes"
+GRUB_TERMINAL=console
+GRUB_GFXMODE=false
+GRUB_TIMEOUT_STYLE=""
+GRUB_TIMEOUT=5
+GRUB_DISABLE_LINUX_UUID=true
+GRUB_DISABLE_LINUX_PARTUUID=false
+GRUB_DEFAULT=saved
+GRUB_SAVEDEFAULT=true

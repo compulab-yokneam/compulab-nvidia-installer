@@ -1,0 +1,19 @@
+GRUB_DEFAULT=/etc/default/grub
+GRUB_COMPULAB_DEFAULT=/usr/share/compulab/grub-default
+
+# Add compulab values
+grep -q compulab ${GRUB_DEFAULT} || cat ${GRUB_COMPULAB_DEFAULT} >> ${GRUB_DEFAULT}
+
+cat << eof
+insmod reboot
+insmod progress
+insmod help
+insmod lsefi
+insmod echo
+insmod loadenv
+insmod fdt
+insmod sleep
+insmod regexp
+insmod part_gpt
+insmod ext2
+eof

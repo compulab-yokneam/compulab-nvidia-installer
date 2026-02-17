@@ -1,0 +1,216 @@
+_BASH_SOURCE=${BASH_SOURCE[0]}
+_WORK_DIR=$(dirname $(readlink -e ${BASH_SOURCE[0]}))
+
+_DISK_LAYOUT=${src_dir}/disk.layout
+_APP_SIZE=0
+declare -A layout_array
+
+layout_array["layout_01"]="01_Nvidia Layout (DEFAULT); rootfs till the end of the media"
+layout_01() {
+    _APP_SIZE=0
+    _update_layout() {
+        wait 1
+    }
+}
+
+_layout_with_size() {
+    _APP_SIZE=${app_size}
+    _update_layout() {
+        wait 1
+        add_swap
+        wait 1
+        part_label=${data_part_name} add_ext4
+        wait 1
+        partprobe ${device}
+        wait 1
+        local part_device=$(get_partition_by_name ${data_part_name})
+        part=${part_device} expand_partition
+        wait 1
+    }
+}
+
+layout_array["layout_02"]="02_Nvidia Layout; rootfs=<user_defined_>GiB, swap=16GiB, data partition till the end of the media"
+layout_02() {
+    local select_string="32 64 128 Exit"
+    local app_size=""
+    PS3="Choose rootfs size > "
+    while [ -z ${app_size:-""} ];do
+        select j in ${select_string}; do
+            case ${j} in
+                "Exit")
+                exit 0
+                ;;
+                *)
+                app_size=${j}
+                break
+                ;;
+            esac
+        done
+    done
+    app_size=${app_size} _layout_with_size
+}
+
+apply_layout() {
+    local REAL_SIZE=$(( ${_APP_SIZE}  << 21 ))
+    [[ ${REAL_SIZE} -eq 0 ]] && REAL_SIZE=""
+    sed "s/@@SIZE@@/${REAL_SIZE}/g" ${_DISK_LAYOUT} | tee ${WORKING_LAYOUT}
+}
+
+WORKING_LAYOUT=/tmp/disk.layout
+
+inst_init() {
+    # Umount the file; it could be mounted; after a failed run
+    while [ 1 ];do
+        umount ${src_dir}/disk.layout &>/dev/null || break
+    done
+    apply_layout
+    mount -B ${WORKING_LAYOUT} ${src_dir}/disk.layout
+}
+
+# After APP
+add_swap() {
+    local after=${after:-"root"}
+    local part_size_gb=${part_size_gb:-16}
+    local part=$(get_partition_by_name ${after})
+    [[ -n ${part:-""} ]] || return 22
+    part=$(basename ${part})
+    local edge_block=$(( $(cat /sys/class/block/${part}/start) + $(cat /sys/class/block/${part}/size) ))
+    # roud up
+    local part_start_mb=$(( $(( $(( $(( ${edge_block} >> 11 )) + 4 )) / 4 )) * 4 ))
+    local part_stop_mb=$(( ${part_start_mb} + $(( ${part_size_gb} << 10 )) ))
+    echo "mkpart swap linux-swap ${part_start_mb}MiB ${part_stop_mb}MiB" | parted ${device}
+}
+
+# After swap
+add_ext4() {
+    local after=${after:-"swap"}
+    local part_size_gb=${part_size_gb:-16}
+    local part_label=${part_label:-"part_label"}
+    local part=$(get_partition_by_name ${after})
+    [[ -n ${part:-""} ]] || return 22
+    part=$(basename ${part})
+    local edge_block=$(( $(cat /sys/class/block/${part}/start) + $(cat /sys/class/block/${part}/size) ))
+    # roud up
+    local part_start_mb=$(( $(( $(( $(( ${edge_block} >> 11 )) + 4 )) / 4 )) * 4 ))
+    local part_stop_mb=$(( ${part_start_mb} + $(( ${part_size_gb} << 10 )) ))
+    echo "mkpart ${part_label} ext4 ${part_start_mb}MiB ${part_stop_mb}MiB" | parted ${device}
+}
+
+data_part_name="storage"
+
+_inst_fini() {
+
+    local root_partition=$(get_partition_by_name "root")
+    [[ -n ${root_partition:-""} ]] || return 22
+
+    local _root_partition=$(device=${root_partition} open_device)
+
+    e2fsck -f ${_root_partition} || true
+    # resize2fs ${_root_partition} || true
+    # Mount root device
+    local rootfs_mpoint=$(mktemp --directory)
+    mount ${_root_partition} ${rootfs_mpoint}
+
+    # Mount APP device
+    local app_part=$(get_partition_by_name "APP")
+    local app_mpoint=$(mktemp --directory)
+    mount ${app_part} ${app_mpoint}
+
+    declare -A fstab_array
+    local swap_partition=$(get_partition_by_name "swap")
+    if [[ -n ${swap_partition:-""} ]];then
+        fstab_array["swap"]="/dev/disk/by-partlabel/swap none swap sw 0 0"
+    fi
+
+    local storage_partition=$(get_partition_by_name ${data_part_name})
+    if [[ -n ${storage_partition:-""} ]];then
+        local _device=$(device=${storage_partition} open_device)
+        e2fsck -f ${_device} || true
+        resize2fs ${_device} || true
+        if [[ ${_device} = ${storage_partition} ]];then
+            fstab_array[${data_part_name}]="/dev/disk/by-partlabel/${data_part_name} /${data_part_name} ext4 defaults 0 0"
+        else
+            fstab_array[${data_part_name}]="/dev/mapper/${data_part_name} /${data_part_name} ext4 defaults 0 0"
+        fi
+        device=${storage_partition} close_device
+    fi
+
+    # Update fstab if required
+    for _fstab in ${!fstab_array[@]};do
+        echo ${fstab_array[${_fstab}]} | tee &>/dev/null -a ${rootfs_mpoint}/etc/fstab
+    done
+
+    # Update boot configuration on the original rootfs
+    rootfs_mpoint=${rootfs_mpoint} _extlinux_update
+
+    rootfs_mpoint=${rootfs_mpoint} _rootfs_update
+
+    # crypto_LUKS flow
+    unset ID_FS_TYPE
+    eval $(udevadm info -x --query=property ${root_partition})
+    if [[ ${ID_FS_TYPE:-""} = "crypto_LUKS" ]];then
+
+        # Update extlinux conf root device
+        local rootfs_append="cryptdevice=UUID=${ID_FS_UUID}:root root=/dev/mapper/root"
+        local extlinux_conf_file=${rootfs_mpoint}/boot/extlinux/extlinux.conf
+        cp ${extlinux_conf_file} ${extlinux_conf_file}.0riginal
+        sed -i "s|root=[^[:space:]]*[[:space:]]|${rootfs_append} |g" ${extlinux_conf_file}
+
+        # Install required packages
+        rootfs_mpoint=${rootfs_mpoint} _rootfs_apt cryptsetup-initramfs
+
+        # Deploy created encription stuff
+        # It is a better to avoid deploying to the slash-root
+        # in order to prevent file system attributes change issue.
+        # make sure that / is 0755
+        tar -C ${tmp_root}/etc -cf - . | tar -C ${rootfs_mpoint}/etc -xf -
+        tar -C ${tmp_root}/opt -cf - . | tar -C ${rootfs_mpoint}/opt -xf -
+        #
+        echo "UMASK=0077" | tee -a ${rootfs_mpoint}/etc/initramfs-tools/initramfs.conf
+        cat ${rootfs_mpoint}/opt/compulab/initrd-modules | tee -a ${rootfs_mpoint}/etc/initramfs-tools/modules
+        # Update inird
+        rootfs_mpoint=${rootfs_mpoint} _initrd_update
+    fi
+
+    # Copy rootfs/boot to <boot-partition>/
+    cp -a ${rootfs_mpoint}/boot ${app_mpoint}/
+
+    umount ${app_part}
+    umount ${_root_partition}
+
+    device=${root_partition} close_device
+    rm -rf ${rootfs_mpoint} ${app_mpoint}
+}
+
+_rootfs_update() {
+    [[ -f ${rootfs_dir}/chroot_update.d/run.me ]] || return 0
+    cp ${rootfs_dir}/chroot_update.d/run.me ${rootfs_mpoint}/tmp/run.me
+    chmod a+x ${rootfs_mpoint}/tmp/run.me
+    rootfs_mpoint=${rootfs_mpoint} chroot_cmd=/tmp/run.me issue_chroot
+    rm -rf ${rootfs_mpoint}/tmp/run.me
+}
+
+_extlinux_update() {
+    rootfs_mpoint=${rootfs_mpoint} chroot_cmd=/opt/compulab/init.d/05-boot.sh issue_chroot
+}
+
+_initrd_update() {
+    chmod a+x ${rootfs_mpoint}/opt/compulab/update_initrd.sh
+    rootfs_mpoint=${rootfs_mpoint} chroot_cmd=/opt/compulab/update_initrd.sh issue_chroot
+}
+
+_rootfs_apt() {
+    [[ -n "$@" ]] || return 0
+    local chroot_apt_cmd=/tmp/apt.sh
+cat << eof | tee &>/dev/null ${rootfs_mpoint}/${chroot_apt_cmd}
+    export DEBIAN_FRONTEND=noninteractive
+    apt-get install --yes $@
+eof
+    chmod a+x ${rootfs_mpoint}/${chroot_apt_cmd}
+    rootfs_mpoint=${rootfs_mpoint} chroot_cmd=${chroot_apt_cmd} issue_chroot
+    rm -rf ${rootfs_mpoint}/${chroot_apt_cmd}
+}
+
+inst_fini() {
+    _inst_fini
+}

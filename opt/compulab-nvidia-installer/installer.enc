@@ -1,0 +1,124 @@
+keys_dir=${rootfs_dir}/etc/keys
+enc_volume_list_del="root,storage"
+enc_volume_list=${enc_volume_list_del//,/ }
+
+export tmp_root=$(mktemp --directory)
+
+system_enc_init() {
+    cp -a ${rootfs_dir}/* ${tmp_root}
+    chown -R root:root ${tmp_root}
+    chmod 0755 ${tmp_root}
+    for part_name in ${enc_volume_list};do
+        local volume_part=$(get_partition_by_name ${part_name})
+        [[ -z ${volume_part:-""} ]] && continue || true
+        part_name=${part_name} create_enc_volume
+    done
+}
+
+system_enc_fini() {
+    for part_name in ${enc_volume_list};do
+        local volume_part=$(get_partition_by_name ${part_name})
+        [[ -z ${volume_part:-""} ]] && continue || true
+
+        unset ID_FS_UUID
+        eval $(udevadm info -x --query=property ${volume_part})
+        # Update the crypttab file with the encrypted volume info
+        echo "${part_name} UUID=${ID_FS_UUID} /etc/keys/${part_name}.key luks,initramfs" | tee -a ${tmp_root}/etc/crypttab 
+
+	# Create an open/close file for each volume
+	mkdir -p ${inst_info}/volumes
+	local _volume_op_file=${inst_info}/volumes/${part_name}
+	echo "cryptsetup luksOpen -d ${inst_info}/etc/keys/${part_name}.key ${volume_part} ${part_name}" | tee &>/dev/null ${_volume_op_file}.open
+	echo "cryptsetup luksClose ${part_name}" | tee &>/dev/null ${_volume_op_file}.close
+	chmod a+x ${_volume_op_file}.*
+
+    done
+    tar -C ${tmp_root} -cf - etc/crypttab etc/keys | tar -C ${inst_info} -xf -
+}
+
+create_enc_volume() {
+    [[ -n ${part_name:-""} ]] || return 22
+
+    local volume_part=$(get_partition_by_name ${part_name})
+
+    if [[ -z ${volume_part:-""} ]];then
+        echo "No partition for ${part_name}; error  ..."
+        return 22
+     fi
+
+    local volume_name=${partname_to_enc_volume_name[${part_name}]:-${part_name}}
+
+    if [[ ! -f ${tmp_root}/etc/keys/${volume_name}.key ]];then
+        echo -n "${volume_name}_enc_volume" > ${tmp_root}/etc/keys/${volume_name}.key
+    fi
+    chmod 0400 ${tmp_root}/etc/keys/${volume_name}.key
+    echo "YES" | cryptsetup -c aes-xts-plain64 -s 512 -y luksFormat ${volume_part} ${tmp_root}/etc/keys/${volume_name}.key
+}
+
+open_enc_volume() {
+    [[ -n ${part_name:-""} ]] || return 22
+
+    local volume_part=$(get_partition_by_name ${part_name})
+
+    if [[ -z ${volume_part:-""} ]];then
+        echo "No partition for ${part_name}; error  ..."
+        return 22
+     fi
+
+    local volume_name=${partname_to_enc_volume_name[${part_name}]:-${part_name}}
+
+    cryptsetup luksOpen -d ${tmp_root}/etc/keys/${volume_name}.key ${volume_part} ${volume_name}
+}
+
+close_enc_volume() {
+    [[ -n ${part_name:-""} ]] || return 22
+
+    local volume_part=$(get_partition_by_name ${part_name})
+
+    if [[ -z ${volume_part:-""} ]];then
+        echo "No partition for ${part_name}; error  ..."
+        return 22
+     fi
+
+    local volume_name=${partname_to_enc_volume_name[${part_name}]:-${part_name}}
+
+    cryptsetup luksClose ${volume_name} || true
+}
+
+enc_help() {
+cat << eof
+	Help
+	-
+	The CompuLab Nvidia installer can encrypt these volumes: ${enc_volume_list_del}
+	Each encrypted volume must have its own key-phrase-file <volume_name>.key
+	in ${keys_dir} folder:
+eof
+	for _vol in ${enc_volume_list};do
+		_msg="${_vol}: ${keys_dir}/${_vol}.key"
+cat << eof
+		${_msg}
+eof
+	done
+cat << eof
+
+	Create key files before running the installer.
+	-
+	If the volume key-phrase-file does not exist,
+	then the installer creates a default file with the key phrase: <volume_name>_enc_volume.
+	-
+	Current status:
+eof
+	for _vol in ${enc_volume_list};do
+		if [[ -f ${keys_dir}/${_vol}.key ]];then
+			_msg="${_vol}: key-phrase-file [ ${keys_dir}/${_vol}.key ]"
+		else
+			_msg="${_vol}: key-phrase [ ${_vol}_enc_volume ]"
+		fi
+cat << eof
+		${_msg}
+eof
+	done
+}
+
+enc_help
+read -p "Press any key to continue; Crtl^C to exit ...."

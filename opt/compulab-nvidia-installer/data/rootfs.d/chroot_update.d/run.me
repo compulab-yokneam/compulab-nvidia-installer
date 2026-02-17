@@ -1,0 +1,13 @@
+#!/bin/bash -x
+
+# The passwordless login is required
+# in order to restart the nv-oem-config-gui.service:
+# 1) Ctrl+Alt+F2
+# 2) login: root
+# 3) systemctl restart nv-oem-config-gui.service
+
+passwordless_login() {
+   passwd -d root
+}
+
+passwordless_login

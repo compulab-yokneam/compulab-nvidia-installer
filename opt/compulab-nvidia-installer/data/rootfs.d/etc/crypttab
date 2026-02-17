@@ -1,0 +1,2 @@
+# <target name>	<source device>		<key file>	<options>
+# volume_name UUID=@@VOLUME_UUID@@ /etc/keys/volume.key luks,initramfs

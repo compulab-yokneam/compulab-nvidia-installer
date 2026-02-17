@@ -1,0 +1,16 @@
+--- disk.layout.l4t	2026-02-09 22:42:59.000000000 +0200
++++ disk.layout.installer	2026-02-11 07:10:35.797824929 +0200
+@@ -4,7 +4,7 @@
+ first-lba: 40
+ sector-size: 512
+ 
+-/dev/loop8p1 : start=     3050048, size=   @@SIZE@@, type=EBD0A0A2-B9E5-4433-87C0-68B6B72699C7, uuid=D2F300AC-CA30-483B-A483-25AD538279B7, name="APP"
++/dev/loop8p1 : start=     3050048, size=     1048576, type=EBD0A0A2-B9E5-4433-87C0-68B6B72699C7, uuid=D9827B07-AFFC-4477-BED3-60C98E450A90, name="APP"
+ /dev/loop8p2 : start=          40, size=      262144, type=EBD0A0A2-B9E5-4433-87C0-68B6B72699C7, uuid=4F9E6ECE-65AF-4DDB-9B79-29719491136A, name="A_kernel"
+ /dev/loop8p3 : start=      262184, size=        1536, type=EBD0A0A2-B9E5-4433-87C0-68B6B72699C7, uuid=586A253F-A671-413F-8C23-17139C53C64A, name="A_kernel-dtb"
+ /dev/loop8p4 : start=      263720, size=       64768, type=EBD0A0A2-B9E5-4433-87C0-68B6B72699C7, uuid=7CBD8BDB-25E6-46B5-BD19-9F43627FF030, name="A_reserved_on_user"
+@@ -19,3 +19,4 @@
+ /dev/loop8p13 : start=     1117736, size=      131072, type=EBD0A0A2-B9E5-4433-87C0-68B6B72699C7, uuid=48C6CBFD-7435-4511-8C7F-512BC51FD950, name="esp_alt"
+ /dev/loop8p14 : start=     1248832, size=      819200, type=EBD0A0A2-B9E5-4433-87C0-68B6B72699C7, uuid=0835135A-5B09-419F-964E-BE1BEF102966, name="UDA"
+ /dev/loop8p15 : start=     2068032, size=      982016, type=EBD0A0A2-B9E5-4433-87C0-68B6B72699C7, uuid=4E6EDCBA-FBFB-4018-9002-324BF9217108, name="reserved"
++/dev/loop8p16 : start=     4098624, size=   @@SIZE@@,  type=EBD0A0A2-B9E5-4433-87C0-68B6B72699C7, uuid=D2F300AC-CA30-483B-A483-25AD538279B7, name="root"
