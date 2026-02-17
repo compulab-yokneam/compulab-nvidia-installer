@@ -14,6 +14,19 @@ source ${work_dir}/installer.inc
 source ${work_dir}/installer.lay
 source ${tools_dir}/restore.partclone.inc
 
+installer_update() {
+    echo -n "Validating the Internet connection:"
+    ping -c 1 8.8.8.8 &>/dev/null && rc=$? || rc=$?
+    if [[ ${rc} -ne 0 ]];then
+        echo "[ FAILURE ]"
+        return 22
+    fi
+    echo "[ OKAY ]"
+    source ${work_dir}/installer.upd
+    echo "The Installer has been updated."
+}
+installer_update
+
 choose_device_func() {
     local select_string=$(get_install_devices)" Exit"
     PS3="Choose device > "
