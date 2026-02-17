@@ -1,5 +1,5 @@
 #!/bin/bash -x
 
-dl_link="https://github.com/compulab-yokneam/compulab-nvidia-installer/archive/master.tar.gz
+dl_link="https://github.com/compulab-yokneam/compulab-nvidia-installer/archive/master.tar.gz"
 
 wget -qO- ${dl_link} | sudo tar -C / --strip-components=1 -xzf -
