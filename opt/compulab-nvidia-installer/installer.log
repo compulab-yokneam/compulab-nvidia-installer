@@ -1,0 +1,5 @@
+export installer_log_base=/tmp/installer.debug
+export installer_log=${installer_log_base}.$(date +%Y%m%d.%H%M%S).$$
+exec 5> ${installer_log}
+export BASH_XTRACEFD="5"
+set -x

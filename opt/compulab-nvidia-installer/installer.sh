@@ -9,6 +9,7 @@ export inst_info=/tmp/install.$(date +%Y_%m_%d-%T | tr  ":" "_")
 mkdir -p ${inst_info}
 #
 
+source ${work_dir}/installer.log
 source ${work_dir}/installer.env
 source ${work_dir}/installer.inc
 source ${work_dir}/installer.lay
