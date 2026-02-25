@@ -70,15 +70,21 @@ function restore_partclone_func() {
             echo "No image file case ${pc_dest_device} ..."
             mkfs.ext4 -F -L ${PARTLABEL} ${pc_dest_device}
         fi
-        device=${_device} close_device
+        # Expand the root partition
+        if [[ ${PARTLABEL:-""} = "root" ]];then
+            e2fsck -f ${pc_dest_device} || true
+            resize2fs ${pc_dest_device} || true
+        fi
 
-        # Expand las part if yes
+        # Expand last part if yes
         [[ ${expand_last_part:-""} = 'yes' ]] || continue
         if [[ ${last_part_num} = ${num} ]];then
             parted -s ${device} resizepart ${last_part_num} 100%
-            e2fsck -f ${_device} || true
-            resize2fs ${_device} || true
+            e2fsck -f ${pc_dest_device} || true
+            resize2fs ${pc_dest_device} || true
         fi
+        device=${_device} close_device
+
     done
     return 0
 }
