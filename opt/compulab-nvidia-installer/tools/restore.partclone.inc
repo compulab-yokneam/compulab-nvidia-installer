@@ -37,6 +37,9 @@ function restore_partclone_func() {
     for _device in ${device}*;do
         eval $(blkid ${_device} | awk -F":" '($0=$2)';)
 
+        local _dev=$(basename ${_device})
+        [[ -f /sys/class/block/${_dev}/partition ]] || continue
+
         if [[ ${PARTLABEL:-""} = "swap" ]];then
             mkswap --label "swap" ${_device}
             continue
@@ -46,8 +49,6 @@ function restore_partclone_func() {
         local pc_dest_device=$(device=${_device} open_device)
         #
 
-        local _dev=$(basename ${_device})
-        [[ -f /sys/class/block/${_dev}/partition ]] || continue
         local num=$(cat /sys/class/block/${_dev}/partition)
         local image=$(ls ${src}/part${num}.* 2>/dev/null || true)
 
@@ -77,8 +78,7 @@ function restore_partclone_func() {
         fi
 
         # Expand last part if yes
-        [[ ${expand_last_part:-""} = 'yes' ]] || continue
-        if [[ ${last_part_num} = ${num} ]];then
+        if [ ${expand_last_part:-""} = 'yes' -a ${last_part_num} = ${num} ];then
             parted -s ${device} resizepart ${last_part_num} 100%
             e2fsck -f ${pc_dest_device} || true
             resize2fs ${pc_dest_device} || true
