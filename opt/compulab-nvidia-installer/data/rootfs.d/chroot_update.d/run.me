@@ -12,7 +12,7 @@ passwordless_login() {
 
 L4T_COMPULAB="https://github.com/compulab-yokneam/compulab-l4t/archive/refs/heads/Linux_for_Tegra.tar.gz"
 update_rootfs_scripts() {
-   curl -fsSL ${L4T_COMPULAB} | tar -C / --strip-components=3 -xvz compulab-l4t-Linux_for_Tegra/compulab.d/rootfs
+   wget -qO - ${L4T_COMPULAB} | tar -C / --strip-components=3 -xvz compulab-l4t-Linux_for_Tegra/compulab.d/rootfs
 }
 
 passwordless_login
