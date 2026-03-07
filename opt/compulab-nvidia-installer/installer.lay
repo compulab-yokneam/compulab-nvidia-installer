@@ -213,4 +213,8 @@ eof
 
 inst_fini() {
     _inst_fini
+    while [ 1 ];do
+        findmnt ${src_dir}/disk.layout &>/dev/null || break
+        umount -l ${src_dir}/disk.layout || true
+    done
 }

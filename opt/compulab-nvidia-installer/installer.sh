@@ -28,6 +28,13 @@ installer_update() {
 }
 installer_update
 
+prepare_data() {
+    pushd ${src_dir} &>/dev/null
+    source ${tools_dir}/prepare.data.sh
+    popd &>/dev/null
+}
+prepare_data
+
 choose_device_func() {
     local select_string=$(get_install_devices)" Exit"
     PS3="Choose device > "
